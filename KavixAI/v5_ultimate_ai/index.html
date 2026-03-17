@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kavix AI v5 Ultimate</title>
+
+<link rel="stylesheet" href="style.css">
+
+<!-- AI Vision -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
+</head>
+<body>
+
+<div class="container">
+
+    <h1>🤖 Kavix AI v5 Ultimate</h1>
+
+    <!-- Camera -->
+    <video id="video" autoplay></video>
+    <button onclick="detectObjects()">👁 Detect</button>
+
+    <!-- Chat -->
+    <div id="chat-box"></div>
+
+    <!-- Input -->
+    <div class="input-area">
+        <input id="input" placeholder="Ask Kavix...">
+        <button onclick="sendMessage()">Send</button>
+        <button onclick="startVoice()">🎤</button>
+    </div>
+
+</div>
+
+<script src="memory.js"></script>
+<script src="voice.js"></script>
+<script src="vision.js"></script>
+<script src="api.js"></script>
+<script src="script.js"></script>
+
+</body>
+</html>

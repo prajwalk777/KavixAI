@@ -1,0 +1,30 @@
+body {
+    font-family: Arial;
+    background: #020617;
+    color: white;
+    text-align: center;
+}
+
+.container {
+    padding: 20px;
+}
+
+video {
+    width: 400px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+}
+
+button {
+    padding: 10px;
+    background: #22c55e;
+    border: none;
+    color: white;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+#output {
+    margin-top: 15px;
+    font-size: 18px;
+}

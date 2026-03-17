@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Kavix AI v3 - Vision AI</title>
+    <link rel="stylesheet" href="style.css">
+
+    <!-- TensorFlow + COCO-SSD -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+</head>
+<body>
+
+<div class="container">
+    <h1>📷 Kavix AI v3</h1>
+
+    <video id="video" autoplay></video>
+    <button onclick="detectObjects()">Detect Objects</button>
+
+    <div id="output"></div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

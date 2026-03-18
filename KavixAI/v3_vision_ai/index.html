@@ -1,25 +1,770 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Kavix AI v3 - Vision AI</title>
-    <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kavix AI v3 — Vision</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+<style>
+  :root {
+    --bg:       #111210;
+    --surface:  #191a18;
+    --panel:    #1f211e;
+    --border:   #2e302c;
+    --text:     #d8dbd4;
+    --dim:      #5a5e56;
+    --yellow:   #e8d44d;
+    --yellow-d: #b5a22a;
+    --red:      #d94f3d;
+    --green:    #5aaa6e;
+  }
 
-    <!-- TensorFlow + COCO-SSD -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px 48px;
+  }
+
+  /* ─── Header ─── */
+  .header {
+    width: 100%;
+    max-width: 760px;
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 28px;
+    border-bottom: 3px solid var(--yellow);
+    padding-bottom: 14px;
+    animation: slideDown 0.5s ease both;
+  }
+
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .header h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(36px, 8vw, 56px);
+    letter-spacing: 3px;
+    color: var(--yellow);
+    line-height: 1;
+  }
+
+  .header-sub {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-left: auto;
+    white-space: nowrap;
+  }
+
+  /* ─── Main layout ─── */
+  .main {
+    width: 100%;
+    max-width: 760px;
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 16px;
+    animation: fadeIn 0.5s ease 0.15s both;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (max-width: 620px) {
+    .main { grid-template-columns: 1fr; }
+  }
+
+  /* ─── Camera pane ─── */
+  .camera-pane {
+    position: relative;
+    background: #000;
+    border: 1px solid var(--border);
+    aspect-ratio: 4/3;
+    overflow: hidden;
+  }
+
+  #video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    opacity: 0;
+    transition: opacity 0.4s;
+  }
+
+  #video.active { opacity: 1; }
+
+  #overlay-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  /* Corner marks */
+  .cam-corner {
+    position: absolute;
+    width: 20px; height: 20px;
+    border-color: var(--yellow);
+    border-style: solid;
+    opacity: 0.6;
+    z-index: 3;
+  }
+  .cam-corner.tl { top: 8px; left: 8px; border-width: 2px 0 0 2px; }
+  .cam-corner.tr { top: 8px; right: 8px; border-width: 2px 2px 0 0; }
+  .cam-corner.bl { bottom: 8px; left: 8px; border-width: 0 0 2px 2px; }
+  .cam-corner.br { bottom: 8px; right: 8px; border-width: 0 2px 2px 0; }
+
+  /* Scan line animation while detecting */
+  .scan-line {
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--yellow), transparent);
+    opacity: 0;
+    z-index: 4;
+    pointer-events: none;
+  }
+
+  .scan-line.active {
+    opacity: 0.7;
+    animation: scanDown 1.2s ease-in-out infinite;
+  }
+
+  @keyframes scanDown {
+    0%   { top: 0%; }
+    100% { top: 100%; }
+  }
+
+  /* Camera off state */
+  .cam-off {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: var(--surface);
+  }
+
+  .cam-off-icon {
+    font-size: 36px;
+    opacity: 0.3;
+  }
+
+  .cam-off span {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  /* ─── Side panel ─── */
+  .side-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* Control block */
+  .control-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 16px;
+  }
+
+  .block-label {
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .block-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ─── Buttons ─── */
+  .btn {
+    width: 100%;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 11px 16px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .btn:last-child { margin-bottom: 0; }
+
+  .btn:hover:not(:disabled) {
+    border-color: var(--yellow);
+    color: var(--yellow);
+    background: rgba(232,212,77,0.06);
+  }
+
+  .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .btn-primary {
+    border-color: var(--yellow);
+    color: var(--bg);
+    background: var(--yellow);
+    font-weight: 500;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: #f0de60;
+    color: var(--bg);
+    box-shadow: 0 0 20px rgba(232,212,77,0.25);
+  }
+
+  .btn-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+    animation: none;
+  }
+
+  .btn-primary .btn-dot { background: var(--bg); }
+
+  /* ─── Status ─── */
+  .status-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+  }
+
+  .status-key {
+    color: var(--dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .status-val {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .status-val.ok   { color: var(--green); }
+  .status-val.warn { color: var(--yellow); }
+  .status-val.err  { color: var(--red); }
+
+  /* ─── Results / Output ─── */
+  .results-section {
+    width: 100%;
+    max-width: 760px;
+    margin-top: 16px;
+  }
+
+  .results-header {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 2px;
+    color: var(--dim);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .results-header::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  #output {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 60px;
+  }
+
+  .result-empty {
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 1.5px;
+    padding: 18px 0;
+  }
+
+  .result-item {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    animation: itemIn 0.25s ease both;
+  }
+
+  @keyframes itemIn {
+    from { opacity: 0; transform: translateX(-8px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  .result-rank {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    color: var(--border);
+    padding: 10px 14px;
+    border-right: 1px solid var(--border);
+    min-width: 52px;
+    text-align: center;
+    line-height: 1;
+  }
+
+  .result-label {
+    flex: 1;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .result-conf {
+    padding: 10px 16px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--dim);
+    border-left: 1px solid var(--border);
+    min-width: 64px;
+    text-align: right;
+  }
+
+  .result-bar-wrap {
+    width: 80px;
+    height: 100%;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    border-left: 1px solid var(--border);
+  }
+
+  .result-bar {
+    height: 4px;
+    background: var(--yellow);
+    border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+
+  /* High confidence highlight */
+  .result-item.high .result-rank { color: var(--yellow); }
+  .result-item.high { border-left: 3px solid var(--yellow); }
+
+  /* ─── Log ─── */
+  .log-section {
+    width: 100%;
+    max-width: 760px;
+    margin-top: 24px;
+  }
+
+  #log {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 14px;
+    font-size: 10.5px;
+    color: var(--dim);
+    line-height: 1.8;
+    max-height: 120px;
+    overflow-y: auto;
+    letter-spacing: 0.5px;
+  }
+
+  #log::-webkit-scrollbar { width: 3px; }
+  #log::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .log-line { display: flex; gap: 12px; }
+  .log-time { color: var(--yellow-d); flex-shrink: 0; }
+  .log-msg  { color: var(--dim); }
+  .log-msg.ok  { color: var(--green); }
+  .log-msg.err { color: var(--red); }
+</style>
 </head>
 <body>
 
-<div class="container">
-    <h1>📷 Kavix AI v3</h1>
-
-    <video id="video" autoplay></video>
-    <button onclick="detectObjects()">Detect Objects</button>
-
-    <div id="output"></div>
+<div class="header">
+  <h1>Kavix Vision</h1>
+  <span style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--dim);letter-spacing:2px;">v3</span>
+  <span class="header-sub">Object Detection · COCO-SSD · TF.js</span>
 </div>
 
-<script src="script.js"></script>
+<div class="main">
+
+  <!-- Camera pane -->
+  <div class="camera-pane" id="cam-pane">
+    <div class="cam-corner tl"></div>
+    <div class="cam-corner tr"></div>
+    <div class="cam-corner bl"></div>
+    <div class="cam-corner br"></div>
+    <div class="scan-line" id="scan-line"></div>
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="overlay-canvas"></canvas>
+    <div class="cam-off" id="cam-off">
+      <div class="cam-off-icon">📷</div>
+      <span>Camera offline</span>
+    </div>
+  </div>
+
+  <!-- Side panel -->
+  <div class="side-panel">
+
+    <div class="control-block">
+      <div class="block-label">Camera</div>
+      <button class="btn btn-primary" id="cam-btn" onclick="toggleCamera()">
+        <span class="btn-dot"></span>
+        <span id="cam-btn-text">Start Camera</span>
+      </button>
+    </div>
+
+    <div class="control-block">
+      <div class="block-label">Detection</div>
+      <button class="btn" id="detect-btn" onclick="detectOnce()" disabled>
+        <span class="btn-dot"></span>
+        Single Scan
+      </button>
+      <button class="btn" id="live-btn" onclick="toggleLive()" disabled>
+        <span class="btn-dot"></span>
+        <span id="live-btn-text">Live Detection</span>
+      </button>
+    </div>
+
+    <div class="status-block">
+      <div class="block-label" style="margin-bottom:8px;">System</div>
+      <div class="status-row">
+        <span class="status-key">Camera</span>
+        <span class="status-val err" id="st-cam">OFFLINE</span>
+      </div>
+      <div class="status-row">
+        <span class="status-key">Model</span>
+        <span class="status-val warn" id="st-model">NOT LOADED</span>
+      </div>
+      <div class="status-row">
+        <span class="status-key">Objects</span>
+        <span class="status-val" id="st-objs">—</span>
+      </div>
+      <div class="status-row">
+        <span class="status-key">Mode</span>
+        <span class="status-val" id="st-mode">IDLE</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Results -->
+<div class="results-section">
+  <div class="results-header">Detections</div>
+  <div id="output"><div class="result-empty">// Awaiting scan...</div></div>
+</div>
+
+<!-- Log -->
+<div class="log-section">
+  <div class="results-header">Log</div>
+  <div id="log"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+let stream       = null;
+let cocoModel    = null;
+let cameraOn     = false;
+let liveRunning  = false;
+let liveRafId    = null;
+
+const video   = document.getElementById('video');
+const canvas  = document.getElementById('overlay-canvas');
+const ctx     = canvas.getContext('2d');
+
+
+// ═══════════════════════════════════════════
+// LOG
+// ═══════════════════════════════════════════
+function log(msg, type = '') {
+  const el   = document.getElementById('log');
+  const time = new Date().toLocaleTimeString('en', { hour12: false });
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.innerHTML = `<span class="log-time">${time}</span><span class="log-msg ${type}">${msg}</span>`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function setStatus(id, val, cls) {
+  const el = document.getElementById(id);
+  el.textContent = val;
+  el.className = `status-val${cls ? ' ' + cls : ''}`;
+}
+
+
+// ═══════════════════════════════════════════
+// CAMERA
+// ═══════════════════════════════════════════
+async function toggleCamera() {
+  if (cameraOn) {
+    stopCamera();
+  } else {
+    await startCamera();
+  }
+}
+
+async function startCamera() {
+  log('Requesting camera access...');
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = stream;
+    video.classList.add('active');
+    document.getElementById('cam-off').style.display = 'none';
+    cameraOn = true;
+
+    document.getElementById('cam-btn-text').textContent = 'Stop Camera';
+    document.getElementById('detect-btn').disabled = false;
+    document.getElementById('live-btn').disabled = false;
+    setStatus('st-cam', 'ONLINE', 'ok');
+    log('Camera online.', 'ok');
+
+    // Auto-load model
+    if (!cocoModel) loadModel();
+  } catch (e) {
+    log(`Camera error: ${e.message}`, 'err');
+    setStatus('st-cam', 'ERROR', 'err');
+  }
+}
+
+function stopCamera() {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  video.srcObject = null;
+  video.classList.remove('active');
+  document.getElementById('cam-off').style.display = 'flex';
+  cameraOn = false;
+  stopLive();
+
+  document.getElementById('cam-btn-text').textContent = 'Start Camera';
+  document.getElementById('detect-btn').disabled = true;
+  document.getElementById('live-btn').disabled = true;
+  setStatus('st-cam', 'OFFLINE', 'err');
+  clearCanvas();
+  log('Camera stopped.');
+}
+
+
+// ═══════════════════════════════════════════
+// MODEL
+// ═══════════════════════════════════════════
+async function loadModel() {
+  log('Loading COCO-SSD model...');
+  setStatus('st-model', 'LOADING…', 'warn');
+  try {
+    cocoModel = await cocoSsd.load();
+    setStatus('st-model', 'READY', 'ok');
+    log('COCO-SSD model loaded.', 'ok');
+  } catch (e) {
+    setStatus('st-model', 'FAILED', 'err');
+    log(`Model load failed: ${e.message}`, 'err');
+  }
+}
+
+
+// ═══════════════════════════════════════════
+// DETECTION
+// ═══════════════════════════════════════════
+async function detectOnce() {
+  if (!cameraOn) { log('Camera not active.', 'err'); return; }
+  if (!cocoModel) {
+    log('Model not ready — loading...', 'warn');
+    await loadModel();
+  }
+
+  document.getElementById('scan-line').classList.add('active');
+  setStatus('st-mode', 'SCANNING');
+  log('Running single detection...');
+
+  try {
+    const preds = await cocoModel.detect(video);
+    renderResults(preds);
+    drawBoxes(preds);
+    log(`Detected ${preds.length} object(s).`, preds.length ? 'ok' : '');
+  } catch (e) {
+    log(`Detection error: ${e.message}`, 'err');
+  }
+
+  document.getElementById('scan-line').classList.remove('active');
+  setStatus('st-mode', 'IDLE');
+}
+
+async function toggleLive() {
+  if (liveRunning) {
+    stopLive();
+  } else {
+    startLive();
+  }
+}
+
+async function startLive() {
+  if (!cameraOn) return;
+  if (!cocoModel) await loadModel();
+  liveRunning = true;
+  document.getElementById('live-btn-text').textContent = 'Stop Live';
+  document.getElementById('scan-line').classList.add('active');
+  setStatus('st-mode', 'LIVE');
+  log('Live detection started.', 'ok');
+  liveLoop();
+}
+
+function stopLive() {
+  liveRunning = false;
+  if (liveRafId) cancelAnimationFrame(liveRafId);
+  document.getElementById('live-btn-text').textContent = 'Live Detection';
+  document.getElementById('scan-line').classList.remove('active');
+  setStatus('st-mode', 'IDLE');
+  if (liveRunning === false) log('Live detection stopped.');
+}
+
+async function liveLoop() {
+  if (!liveRunning) return;
+  if (cocoModel && video.readyState === 4) {
+    try {
+      const preds = await cocoModel.detect(video);
+      renderResults(preds);
+      drawBoxes(preds);
+    } catch (_) {}
+  }
+  liveRafId = requestAnimationFrame(liveLoop);
+}
+
+
+// ═══════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════
+function renderResults(preds) {
+  const out = document.getElementById('output');
+  setStatus('st-objs', preds.length || '0');
+
+  if (!preds.length) {
+    out.innerHTML = '<div class="result-empty">// No objects detected.</div>';
+    return;
+  }
+
+  out.innerHTML = '';
+  preds
+    .sort((a, b) => b.score - a.score)
+    .forEach((p, i) => {
+      const conf = Math.round(p.score * 100);
+      const high = conf >= 75 ? 'high' : '';
+      const item = document.createElement('div');
+      item.className = `result-item ${high}`;
+      item.style.animationDelay = `${i * 0.05}s`;
+      item.innerHTML = `
+        <div class="result-rank">${i + 1}</div>
+        <div class="result-label">${p.class}</div>
+        <div class="result-conf">${conf}%</div>
+        <div class="result-bar-wrap">
+          <div class="result-bar" style="width:${conf}%"></div>
+        </div>`;
+      out.appendChild(item);
+    });
+}
+
+function clearCanvas() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function drawBoxes(preds) {
+  canvas.width  = video.videoWidth  || canvas.offsetWidth;
+  canvas.height = video.videoHeight || canvas.offsetHeight;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const scaleX = canvas.offsetWidth  / (video.videoWidth  || 1);
+  const scaleY = canvas.offsetHeight / (video.videoHeight || 1);
+
+  preds.forEach(p => {
+    const [x, y, w, h] = p.bbox;
+    const conf = Math.round(p.score * 100);
+    const cx = x * scaleX, cy = y * scaleY;
+    const cw = w * scaleX, ch = h * scaleY;
+
+    // Box
+    ctx.strokeStyle = conf >= 75 ? '#e8d44d' : '#5aaa6e';
+    ctx.lineWidth   = 1.5;
+    ctx.strokeRect(cx, cy, cw, ch);
+
+    // Corner accents
+    const cs = 10;
+    ctx.strokeStyle = '#e8d44d';
+    ctx.lineWidth   = 2;
+    [[cx, cy, cs, 0, 0, cs],
+     [cx+cw, cy, -cs, 0, 0, cs],
+     [cx, cy+ch, cs, 0, 0, -cs],
+     [cx+cw, cy+ch, -cs, 0, 0, -cs]].forEach(([ox, oy, dx1, dy1, dx2, dy2]) => {
+       ctx.beginPath();
+       ctx.moveTo(ox + dx1, oy + dy1);
+       ctx.lineTo(ox, oy);
+       ctx.lineTo(ox + dx2, oy + dy2);
+       ctx.stroke();
+     });
+
+    // Label
+    const label = `${p.class.toUpperCase()} ${conf}%`;
+    ctx.font      = '500 11px "IBM Plex Mono", monospace';
+    const tw      = ctx.measureText(label).width;
+    ctx.fillStyle = '#e8d44d';
+    ctx.fillRect(cx, cy - 20, tw + 10, 20);
+    ctx.fillStyle = '#111210';
+    ctx.fillText(label, cx + 5, cy - 5);
+  });
+}
+
+
+// ─── Init log ───
+log('Kavix Vision v3 initialized.', 'ok');
+log('Click "Start Camera" to begin.');
+</script>
 </body>
 </html>

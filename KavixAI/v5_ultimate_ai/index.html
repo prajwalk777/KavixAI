@@ -2,42 +2,849 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kavix AI v5 Ultimate</title>
 
-<link rel="stylesheet" href="style.css">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
 
 <!-- AI Vision -->
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
 
+<style>
+  :root {
+    --bg:        #050810;
+    --panel:     #090d1a;
+    --border:    #1a2540;
+    --accent:    #00f0ff;
+    --accent2:   #ff3cac;
+    --accent3:   #7b2fff;
+    --text:      #c8d8f0;
+    --text-dim:  #4a6080;
+    --user-msg:  #0a1628;
+    --ai-msg:    #06101e;
+    --glow:      0 0 12px rgba(0,240,255,0.35);
+    --glow2:     0 0 12px rgba(255,60,172,0.35);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow-x: hidden;
+  }
+
+  /* Animated grid background */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,240,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,240,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Scanline overlay */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .container {
+    position: relative; z-index: 2;
+    width: min(700px, 96vw);
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    box-shadow: 0 0 60px rgba(0,240,255,0.08), 0 0 120px rgba(123,47,255,0.06);
+    animation: fadeIn 0.6s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ─── Header ─── */
+  .header {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: linear-gradient(90deg, rgba(0,240,255,0.04), transparent);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0;
+    height: 1px; width: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent3), var(--accent2), transparent);
+    animation: scanH 3s linear infinite;
+  }
+
+  @keyframes scanH {
+    from { transform: translateX(-100%); }
+    to   { transform: translateX(100%); }
+  }
+
+  .logo-icon {
+    width: 36px; height: 36px;
+    border: 1.5px solid var(--accent);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    box-shadow: var(--glow);
+    animation: pulse 2.5s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes pulse {
+    0%, 100% { box-shadow: var(--glow); }
+    50%       { box-shadow: 0 0 24px rgba(0,240,255,0.6); }
+  }
+
+  .header-text h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: var(--accent);
+    text-shadow: var(--glow);
+    text-transform: uppercase;
+  }
+
+  .header-text p {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    margin-top: 2px;
+  }
+
+  .status-dot {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #00ff88;
+    box-shadow: 0 0 8px #00ff88;
+    animation: blink 1.5s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.3; }
+  }
+
+  /* ─── Camera Section ─── */
+  .vision-section {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .video-wrapper {
+    position: relative;
+    flex: 1;
+  }
+
+  #video {
+    width: 100%;
+    max-height: 200px;
+    object-fit: cover;
+    display: block;
+    border: 1px solid var(--border);
+    background: #000;
+  }
+
+  /* Corner brackets */
+  .video-wrapper::before, .video-wrapper::after,
+  .video-wrapper .corner-br, .video-wrapper .corner-bl {
+    content: '';
+    position: absolute;
+    width: 16px; height: 16px;
+    border-color: var(--accent);
+    border-style: solid;
+    z-index: 3;
+    opacity: 0.7;
+  }
+  .video-wrapper::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+  .video-wrapper::after  { top: -1px; right: -1px; border-width: 2px 2px 0 0; }
+  .video-wrapper .corner-br { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+  .video-wrapper .corner-bl { bottom: -1px; left: -1px; border-width: 0 0 2px 2px; }
+
+  #canvas { display: none; }
+
+  .vision-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* ─── Buttons ─── */
+  .btn {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    padding: 9px 16px;
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    white-space: nowrap;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: var(--accent);
+    transform: translateX(-101%);
+    transition: transform 0.2s;
+    z-index: 0;
+  }
+
+  .btn:hover::before { transform: translateX(0); }
+  .btn:hover { color: var(--bg); box-shadow: var(--glow); }
+  .btn span { position: relative; z-index: 1; }
+
+  .btn-pink  { border-color: var(--accent2); color: var(--accent2); }
+  .btn-pink::before  { background: var(--accent2); }
+  .btn-pink:hover    { box-shadow: var(--glow2); }
+
+  .btn-purple { border-color: var(--accent3); color: var(--accent3); }
+  .btn-purple::before { background: var(--accent3); }
+  .btn-purple:hover { box-shadow: 0 0 12px rgba(123,47,255,0.5); }
+
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn:disabled::before { display: none; }
+
+  /* ─── Chat Box ─── */
+  #chat-box {
+    height: 320px;
+    overflow-y: auto;
+    padding: 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    scroll-behavior: smooth;
+  }
+
+  #chat-box::-webkit-scrollbar { width: 4px; }
+  #chat-box::-webkit-scrollbar-track { background: transparent; }
+  #chat-box::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .msg {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    animation: msgIn 0.3s ease;
+  }
+
+  @keyframes msgIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg-label {
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .msg-user .msg-label { color: rgba(0,240,255,0.5); text-align: right; }
+  .msg-ai   .msg-label { color: rgba(255,60,172,0.5); }
+
+  .msg-bubble {
+    padding: 10px 14px;
+    font-size: 13px;
+    line-height: 1.6;
+    border: 1px solid var(--border);
+    max-width: 85%;
+  }
+
+  .msg-user { align-items: flex-end; }
+  .msg-user .msg-bubble {
+    background: var(--user-msg);
+    border-color: rgba(0,240,255,0.2);
+    color: var(--text);
+  }
+
+  .msg-ai .msg-bubble {
+    background: var(--ai-msg);
+    border-color: rgba(255,60,172,0.15);
+    border-left: 2px solid var(--accent2);
+    color: var(--text);
+  }
+
+  .typing-indicator .msg-bubble {
+    display: flex; gap: 5px; align-items: center;
+    padding: 12px 16px;
+  }
+
+  .typing-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent2);
+    animation: typingBounce 0.8s ease-in-out infinite;
+  }
+
+  .typing-dot:nth-child(2) { animation-delay: 0.15s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.30s; }
+
+  @keyframes typingBounce {
+    0%, 100% { transform: translateY(0); opacity: 0.4; }
+    50%       { transform: translateY(-5px); opacity: 1; }
+  }
+
+  /* ─── Detection results ─── */
+  #detection-results {
+    padding: 10px 24px;
+    font-size: 11px;
+    color: var(--text-dim);
+    border-top: 1px solid var(--border);
+    min-height: 30px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .det-tag {
+    padding: 2px 10px;
+    border: 1px solid rgba(0,240,255,0.25);
+    color: var(--accent);
+    font-size: 10px;
+    letter-spacing: 1px;
+    animation: msgIn 0.3s ease;
+  }
+
+  /* ─── Input Area ─── */
+  .input-area {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+    background: linear-gradient(0deg, rgba(0,240,255,0.02), transparent);
+    position: relative;
+  }
+
+  .input-area::before {
+    content: '';
+    position: absolute; top: 0; left: 0;
+    height: 1px; width: 100%;
+    background: linear-gradient(90deg, transparent, var(--accent3), var(--accent), transparent);
+    opacity: 0.4;
+  }
+
+  #input {
+    flex: 1;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    padding: 10px 14px;
+    background: #060c18;
+    border: 1px solid var(--border);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    letter-spacing: 0.5px;
+  }
+
+  #input::placeholder { color: var(--text-dim); }
+
+  #input:focus {
+    border-color: rgba(0,240,255,0.4);
+    box-shadow: 0 0 0 1px rgba(0,240,255,0.1) inset;
+  }
+
+  /* ─── Footer ─── */
+  .footer {
+    padding: 8px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  #memory-count { color: rgba(123,47,255,0.7); }
+
+  /* API key modal */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(5,8,16,0.9);
+    z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 28px;
+    width: min(420px, 90vw);
+    box-shadow: 0 0 40px rgba(0,240,255,0.1);
+    animation: fadeIn 0.3s ease;
+  }
+
+  .modal h2 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 14px;
+    color: var(--accent);
+    letter-spacing: 2px;
+    margin-bottom: 6px;
+  }
+
+  .modal p {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+    line-height: 1.6;
+  }
+
+  .modal input {
+    width: 100%;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    padding: 10px 12px;
+    background: #060c18;
+    border: 1px solid var(--border);
+    color: var(--text);
+    margin-bottom: 14px;
+    outline: none;
+  }
+
+  .modal input:focus { border-color: rgba(0,240,255,0.4); }
+
+  .modal .btn { width: 100%; text-align: center; }
+
+  /* ─── Responsive ─── */
+  @media (max-width: 500px) {
+    .vision-section { flex-direction: column; }
+    .vision-controls { flex-direction: row; flex-wrap: wrap; }
+    .header-text h1 { font-size: 13px; }
+  }
+</style>
 </head>
 <body>
 
+<!-- API Key Modal -->
+<div class="modal-overlay" id="api-modal">
+  <div class="modal">
+    <h2>INITIALIZE KAVIX</h2>
+    <p>Enter your Anthropic API key to activate Kavix AI. The key is stored only in memory for this session.</p>
+    <input type="password" id="api-key-input" placeholder="sk-ant-...">
+    <button class="btn" onclick="saveApiKey()"><span>⚡ ACTIVATE</span></button>
+  </div>
+</div>
+
 <div class="container">
 
-    <h1>🤖 Kavix AI v5 Ultimate</h1>
-
-    <!-- Camera -->
-    <video id="video" autoplay></video>
-    <button onclick="detectObjects()">👁 Detect</button>
-
-    <!-- Chat -->
-    <div id="chat-box"></div>
-
-    <!-- Input -->
-    <div class="input-area">
-        <input id="input" placeholder="Ask Kavix...">
-        <button onclick="sendMessage()">Send</button>
-        <button onclick="startVoice()">🎤</button>
+  <!-- Header -->
+  <div class="header">
+    <div class="logo-icon">🤖</div>
+    <div class="header-text">
+      <h1>Kavix AI v5</h1>
+      <p>ULTIMATE INTERFACE // NEURAL CORE ONLINE</p>
     </div>
+    <div class="status-dot">
+      <div class="dot"></div>
+      LIVE
+    </div>
+  </div>
+
+  <!-- Vision Section -->
+  <div class="vision-section">
+    <div class="video-wrapper">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="canvas"></canvas>
+      <div class="corner-br"></div>
+      <div class="corner-bl"></div>
+    </div>
+    <div class="vision-controls">
+      <button class="btn" id="cam-btn" onclick="toggleCamera()"><span>📷 CAMERA</span></button>
+      <button class="btn btn-pink" id="detect-btn" onclick="detectObjects()" disabled><span>👁 DETECT</span></button>
+      <button class="btn btn-purple" onclick="captureAndDescribe()" id="describe-btn" disabled><span>🔍 DESCRIBE</span></button>
+    </div>
+  </div>
+
+  <!-- Detection tags -->
+  <div id="detection-results"><span style="color:var(--text-dim);font-size:10px;letter-spacing:1px;">// VISION IDLE</span></div>
+
+  <!-- Chat Box -->
+  <div id="chat-box">
+    <div class="msg msg-ai">
+      <span class="msg-label">◈ kavix</span>
+      <div class="msg-bubble">Kavix AI v5 online. I can chat, analyse camera input, detect objects, and remember our conversation. How can I assist?</div>
+    </div>
+  </div>
+
+  <!-- Input Area -->
+  <div class="input-area">
+    <input id="input" placeholder="Query Kavix..." onkeydown="if(event.key==='Enter')sendMessage()">
+    <button class="btn" onclick="sendMessage()"><span>SEND</span></button>
+    <button class="btn btn-pink" id="voice-btn" onclick="startVoice()"><span>🎤</span></button>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span>KAVIX AI // NEURAL v5.0</span>
+    <span>MEMORY: <span id="memory-count">0</span> NODES</span>
+    <span id="model-label">MODEL: CLAUDE-3</span>
+  </div>
 
 </div>
 
-<script src="memory.js"></script>
-<script src="voice.js"></script>
-<script src="vision.js"></script>
-<script src="api.js"></script>
-<script src="script.js"></script>
+<script>
+// ══════════════════════════════════════════════════════════
+// MEMORY MODULE
+// ══════════════════════════════════════════════════════════
+const Memory = (() => {
+  let store = [];
+
+  function add(role, content) {
+    store.push({ role, content });
+    if (store.length > 40) store.shift(); // rolling window
+    updateMemoryDisplay();
+  }
+
+  function getHistory() {
+    return store.slice();
+  }
+
+  function clear() {
+    store = [];
+    updateMemoryDisplay();
+  }
+
+  function updateMemoryDisplay() {
+    const el = document.getElementById('memory-count');
+    if (el) el.textContent = store.length;
+  }
+
+  return { add, getHistory, clear };
+})();
+
+
+// ══════════════════════════════════════════════════════════
+// API MODULE
+// ══════════════════════════════════════════════════════════
+let API_KEY = '';
+
+function saveApiKey() {
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key.startsWith('sk-')) {
+    alert('Please enter a valid Anthropic API key (starts with sk-)');
+    return;
+  }
+  API_KEY = key;
+  document.getElementById('api-modal').style.display = 'none';
+}
+
+async function callClaude(userMessage, imageBase64 = null) {
+  if (!API_KEY) {
+    document.getElementById('api-modal').style.display = 'flex';
+    return null;
+  }
+
+  const history = Memory.getHistory();
+
+  let userContent;
+  if (imageBase64) {
+    userContent = [
+      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageBase64 } },
+      { type: 'text', text: userMessage }
+    ];
+  } else {
+    userContent = userMessage;
+  }
+
+  const messages = [
+    ...history,
+    { role: 'user', content: userContent }
+  ];
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': API_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-4-5',
+        max_tokens: 1024,
+        system: 'You are Kavix, a highly capable AI assistant. Be concise, precise, and helpful. You have vision capabilities and memory. Respond in a clear, intelligent manner.',
+        messages
+      })
+    });
+
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error.message);
+    const reply = data.content?.[0]?.text || '(No response)';
+
+    // Save to memory
+    Memory.add('user', userMessage);
+    Memory.add('assistant', reply);
+
+    return reply;
+  } catch (err) {
+    console.error(err);
+    return `⚠ Error: ${err.message}`;
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════
+// VISION MODULE
+// ══════════════════════════════════════════════════════════
+let cocoModel = null;
+let stream = null;
+let cameraActive = false;
+
+async function toggleCamera() {
+  const video = document.getElementById('video');
+  const btn = document.getElementById('cam-btn');
+
+  if (cameraActive) {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    video.srcObject = null;
+    cameraActive = false;
+    btn.querySelector('span').textContent = '📷 CAMERA';
+    document.getElementById('detect-btn').disabled = true;
+    document.getElementById('describe-btn').disabled = true;
+  } else {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      video.srcObject = stream;
+      cameraActive = true;
+      btn.querySelector('span').textContent = '⏹ STOP';
+      document.getElementById('detect-btn').disabled = false;
+      document.getElementById('describe-btn').disabled = false;
+    } catch (e) {
+      appendMessage('ai', `Camera error: ${e.message}`);
+    }
+  }
+}
+
+async function detectObjects() {
+  const video = document.getElementById('video');
+  const resultsDiv = document.getElementById('detection-results');
+
+  if (!cameraActive) {
+    appendMessage('ai', 'Please activate the camera first.');
+    return;
+  }
+
+  resultsDiv.innerHTML = '<span style="color:var(--accent);font-size:10px;letter-spacing:1px;animation:blink 0.5s infinite;">// SCANNING...</span>';
+
+  if (!cocoModel) {
+    resultsDiv.innerHTML = '<span style="color:var(--text-dim);font-size:10px;">Loading vision model...</span>';
+    try {
+      cocoModel = await cocoSsd.load();
+    } catch (e) {
+      resultsDiv.innerHTML = '<span style="color:var(--accent2);">⚠ Model load failed</span>';
+      return;
+    }
+  }
+
+  const predictions = await cocoModel.detect(video);
+  resultsDiv.innerHTML = '';
+
+  if (predictions.length === 0) {
+    resultsDiv.innerHTML = '<span style="color:var(--text-dim);font-size:10px;">// NO OBJECTS DETECTED</span>';
+    return;
+  }
+
+  const seen = [];
+  predictions.forEach(p => {
+    const label = p.class.toUpperCase();
+    const conf = Math.round(p.score * 100);
+    if (!seen.includes(label)) {
+      seen.push(label);
+      const tag = document.createElement('div');
+      tag.className = 'det-tag';
+      tag.textContent = `${label} ${conf}%`;
+      resultsDiv.appendChild(tag);
+    }
+  });
+
+  const summary = seen.join(', ');
+  appendMessage('ai', `👁 Vision scan complete. Detected: ${summary}`);
+  Memory.add('assistant', `Vision detected: ${summary}`);
+}
+
+function captureFrame() {
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  if (!cameraActive || !video.videoWidth) return null;
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  return canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+}
+
+async function captureAndDescribe() {
+  if (!cameraActive) {
+    appendMessage('ai', 'Please activate the camera first.');
+    return;
+  }
+  const b64 = captureFrame();
+  if (!b64) return;
+
+  appendMessage('user', '[Camera frame captured — describe what you see]');
+  showTyping();
+  const reply = await callClaude('Describe what you see in this image in detail.', b64);
+  removeTyping();
+  if (reply) appendMessage('ai', reply);
+}
+
+
+// ══════════════════════════════════════════════════════════
+// VOICE MODULE
+// ══════════════════════════════════════════════════════════
+let recognition = null;
+
+function startVoice() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    appendMessage('ai', '⚠ Speech recognition is not supported in this browser.');
+    return;
+  }
+
+  if (!recognition) {
+    recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = e => {
+      const transcript = e.results[0][0].transcript;
+      document.getElementById('input').value = transcript;
+      sendMessage();
+    };
+
+    recognition.onerror = e => appendMessage('ai', `Voice error: ${e.error}`);
+    recognition.onend = () => {
+      document.getElementById('voice-btn').querySelector('span').textContent = '🎤';
+    };
+  }
+
+  recognition.start();
+  document.getElementById('voice-btn').querySelector('span').textContent = '🔴';
+}
+
+function speakText(text) {
+  if (!window.speechSynthesis) return;
+  const utt = new SpeechSynthesisUtterance(text.substring(0, 300));
+  utt.rate = 1.0;
+  utt.pitch = 1.0;
+  speechSynthesis.speak(utt);
+}
+
+
+// ══════════════════════════════════════════════════════════
+// CHAT UI
+// ══════════════════════════════════════════════════════════
+function appendMessage(role, text) {
+  const box = document.getElementById('chat-box');
+  const div = document.createElement('div');
+  div.className = `msg msg-${role === 'user' ? 'user' : 'ai'}`;
+
+  const label = document.createElement('span');
+  label.className = 'msg-label';
+  label.textContent = role === 'user' ? '◇ you' : '◈ kavix';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble';
+  bubble.textContent = text;
+
+  div.appendChild(label);
+  div.appendChild(bubble);
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+function showTyping() {
+  const box = document.getElementById('chat-box');
+  const div = document.createElement('div');
+  div.className = 'msg msg-ai typing-indicator';
+  div.id = 'typing';
+
+  const label = document.createElement('span');
+  label.className = 'msg-label';
+  label.textContent = '◈ kavix';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble';
+  bubble.innerHTML = '<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>';
+
+  div.appendChild(label);
+  div.appendChild(bubble);
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+function removeTyping() {
+  const el = document.getElementById('typing');
+  if (el) el.remove();
+}
+
+async function sendMessage() {
+  const input = document.getElementById('input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+
+  appendMessage('user', text);
+  showTyping();
+
+  const reply = await callClaude(text);
+  removeTyping();
+
+  if (reply) {
+    appendMessage('ai', reply);
+    speakText(reply);
+  }
+}
+</script>
 
 </body>
 </html>

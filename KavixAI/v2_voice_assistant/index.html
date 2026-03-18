@@ -1,24 +1,662 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Kavix AI v2 - Voice Assistant</title>
-    <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kavix AI v2 — Voice</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,300&family=Fira+Code:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --sage:     #e8ede4;
+    --sage-d:   #d4dcd0;
+    --surface:  #f2f5f0;
+    --card:     #fafcf9;
+    --ink:      #272d22;
+    --ink-mid:  #5a6654;
+    --ink-dim:  #9aaa90;
+    --moss:     #4a7c55;
+    --moss-l:   #6a9c74;
+    --clay:     #b05c3a;
+    --clay-l:   #d4856a;
+    --lavender: #7a6ea0;
+    --shadow:   rgba(39,45,34,0.08);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--sage);
+    color: var(--ink);
+    font-family: 'Fira Code', monospace;
+  }
+
+  /* Organic noise texture */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.6;
+  }
+
+  .shell {
+    position: relative; z-index: 1;
+    max-width: 560px;
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 0 0 32px;
+  }
+
+  /* ─── Header ─── */
+  .header {
+    padding: 40px 32px 24px;
+    animation: riseIn 0.7s cubic-bezier(0.16,1,0.3,1) both;
+  }
+
+  @keyframes riseIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .header-eyebrow {
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin-bottom: 6px;
+  }
+
+  .header h1 {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(32px, 8vw, 48px);
+    font-weight: 300;
+    line-height: 1.05;
+    color: var(--ink);
+    letter-spacing: -1px;
+  }
+
+  .header h1 .accent {
+    font-style: italic;
+    color: var(--moss);
+  }
+
+  .header-line {
+    margin-top: 16px;
+    height: 1px;
+    background: linear-gradient(90deg, var(--ink) 0%, var(--ink-dim) 40%, transparent 100%);
+    transform-origin: left;
+    animation: growLine 0.8s ease 0.3s both;
+  }
+
+  @keyframes growLine {
+    from { transform: scaleX(0); opacity: 0; }
+    to   { transform: scaleX(1); opacity: 1; }
+  }
+
+  .header-meta {
+    margin-top: 8px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--ink-dim);
+    letter-spacing: 1px;
+  }
+
+  /* ─── Chat ─── */
+  #chat-box {
+    flex: 1;
+    padding: 8px 32px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+  }
+
+  #chat-box::-webkit-scrollbar { width: 3px; }
+  #chat-box::-webkit-scrollbar-thumb { background: var(--sage-d); border-radius: 99px; }
+
+  .msg {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    animation: msgFloat 0.4s cubic-bezier(0.16,1,0.3,1) both;
+  }
+
+  @keyframes msgFloat {
+    from { opacity: 0; transform: translateY(10px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .msg-meta {
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .msg-meta-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .msg-user { align-items: flex-end; }
+  .msg-user .msg-meta { justify-content: flex-end; color: var(--clay); }
+  .msg-user .msg-meta-dot { background: var(--clay); order: 1; }
+
+  .msg-ai .msg-meta { color: var(--moss); }
+  .msg-ai .msg-meta-dot { background: var(--moss); }
+
+  .msg-bubble {
+    max-width: 88%;
+    padding: 13px 17px;
+    font-size: 13px;
+    line-height: 1.8;
+    font-weight: 300;
+    border-radius: 2px;
+  }
+
+  .msg-user .msg-bubble {
+    background: var(--clay);
+    color: #fff;
+    border-radius: 12px 2px 12px 12px;
+  }
+
+  .msg-ai .msg-bubble {
+    background: var(--card);
+    color: var(--ink);
+    border: 1px solid var(--sage-d);
+    border-radius: 2px 12px 12px 12px;
+    box-shadow: 0 2px 16px var(--shadow);
+    position: relative;
+  }
+
+  /* Subtle leaf accent on AI bubble */
+  .msg-ai .msg-bubble::after {
+    content: '✦';
+    position: absolute;
+    bottom: 8px; right: 12px;
+    font-size: 8px;
+    color: var(--moss);
+    opacity: 0.4;
+  }
+
+  /* Typing indicator */
+  .msg-typing .msg-bubble {
+    padding: 16px 20px;
+    display: flex;
+    gap: 5px;
+    align-items: center;
+  }
+
+  .ty {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--moss-l);
+    animation: tyPulse 1s ease-in-out infinite;
+  }
+  .ty:nth-child(2) { animation-delay: 0.18s; background: var(--moss); }
+  .ty:nth-child(3) { animation-delay: 0.36s; background: var(--ink-mid); }
+
+  @keyframes tyPulse {
+    0%, 100% { transform: scale(0.7); opacity: 0.4; }
+    50%       { transform: scale(1.1); opacity: 1; }
+  }
+
+  /* ─── Voice Ring ─── */
+  .voice-ring-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 8px 0 16px;
+  }
+
+  .voice-ring {
+    position: relative;
+    width: 72px; height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+
+  .voice-ring:hover { transform: scale(1.06); }
+
+  .ring {
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    border: 1.5px solid var(--sage-d);
+    transition: border-color 0.3s, transform 0.3s;
+  }
+
+  .ring-2 {
+    inset: 8px;
+    border-color: var(--ink-dim);
+    opacity: 0.4;
+  }
+
+  .ring-3 {
+    inset: 16px;
+    border-color: var(--moss);
+    background: var(--moss);
+    opacity: 0;
+    transform: scale(0.8);
+    transition: opacity 0.3s, transform 0.3s;
+  }
+
+  .voice-ring.listening .ring   { border-color: var(--moss); animation: ringPulse 1.2s ease-in-out infinite; }
+  .voice-ring.listening .ring-2 { border-color: var(--moss); opacity: 0.6; animation: ringPulse 1.2s ease-in-out 0.2s infinite; }
+  .voice-ring.listening .ring-3 { opacity: 0.15; transform: scale(1); }
+
+  @keyframes ringPulse {
+    0%, 100% { transform: scale(1); opacity: 0.6; }
+    50%       { transform: scale(1.08); opacity: 1; }
+  }
+
+  .voice-icon {
+    font-size: 22px;
+    position: relative; z-index: 1;
+    transition: transform 0.2s;
+  }
+
+  .voice-ring.listening .voice-icon { transform: scale(1.15); }
+
+  /* ─── Input bar ─── */
+  .input-section {
+    padding: 0 32px;
+  }
+
+  .input-wrap {
+    display: flex;
+    align-items: stretch;
+    background: var(--card);
+    border: 1.5px solid var(--sage-d);
+    border-radius: 99px;
+    overflow: hidden;
+    box-shadow: 0 2px 16px var(--shadow);
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .input-wrap:focus-within {
+    border-color: var(--moss);
+    box-shadow: 0 2px 20px rgba(74,124,85,0.15);
+  }
+
+  #input {
+    flex: 1;
+    font-family: 'Fira Code', monospace;
+    font-size: 13px;
+    font-weight: 300;
+    padding: 14px 20px;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--ink);
+  }
+
+  #input::placeholder { color: var(--ink-dim); font-style: italic; }
+
+  .send-btn {
+    font-family: 'Fira Code', monospace;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 0 20px;
+    background: var(--moss);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+    border-radius: 0 99px 99px 0;
+  }
+
+  .send-btn:hover { background: #3a6644; }
+
+  .input-hint {
+    margin-top: 10px;
+    text-align: center;
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+
+  /* ─── API Modal ─── */
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(232,237,228,0.92);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(6px);
+  }
+
+  .modal {
+    background: var(--card);
+    border: 1.5px solid var(--sage-d);
+    border-radius: 16px;
+    padding: 36px;
+    width: min(400px, 90vw);
+    box-shadow: 0 8px 40px var(--shadow);
+    animation: riseIn 0.35s cubic-bezier(0.16,1,0.3,1);
+    text-align: center;
+  }
+
+  .modal-icon { font-size: 36px; margin-bottom: 12px; }
+
+  .modal h2 {
+    font-family: 'Fraunces', serif;
+    font-size: 22px;
+    font-weight: 300;
+    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+  }
+
+  .modal h2 em { font-style: italic; color: var(--moss); }
+
+  .modal p {
+    font-size: 11.5px;
+    font-weight: 300;
+    color: var(--ink-mid);
+    line-height: 1.7;
+    margin-bottom: 20px;
+  }
+
+  .modal input {
+    width: 100%;
+    font-family: 'Fira Code', monospace;
+    font-size: 12px;
+    font-weight: 300;
+    padding: 12px 16px;
+    background: var(--sage);
+    border: 1.5px solid var(--sage-d);
+    border-radius: 8px;
+    color: var(--ink);
+    outline: none;
+    margin-bottom: 14px;
+    text-align: center;
+    letter-spacing: 0.5px;
+  }
+
+  .modal input:focus { border-color: var(--moss); }
+
+  .modal .send-btn {
+    width: 100%;
+    padding: 13px;
+    font-size: 11px;
+    letter-spacing: 2px;
+    border-radius: 8px;
+  }
+
+  @media (max-width: 480px) {
+    .header, #chat-box, .input-section { padding-left: 20px; padding-right: 20px; }
+  }
+</style>
 </head>
 <body>
 
-<div class="container">
-    <h1>🎤 Kavix AI v2</h1>
-
-    <div id="chat-box"></div>
-
-    <div class="input-area">
-        <input type="text" id="input" placeholder="Type or use mic...">
-        <button onclick="sendMessage()">Send</button>
-        <button onclick="startVoice()">🎤</button>
-    </div>
+<!-- API Key Modal -->
+<div class="overlay" id="api-modal">
+  <div class="modal">
+    <div class="modal-icon">🌿</div>
+    <h2>Hello, I'm <em>Kavix</em></h2>
+    <p>Enter your Anthropic API key to begin our conversation. It's kept only in memory for this session.</p>
+    <input type="password" id="api-key-input" placeholder="sk-ant-api03-...">
+    <button class="send-btn" onclick="saveApiKey()">Begin →</button>
+  </div>
 </div>
 
-<script src="script.js"></script>
+<div class="shell">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-eyebrow">Voice · Memory · AI</div>
+    <h1>Kavix <span class="accent">AI</span><br>version two</h1>
+    <div class="header-line"></div>
+    <div class="header-meta">
+      <span>Voice assistant</span>
+      <span id="mem-label">0 turns</span>
+    </div>
+  </div>
+
+  <!-- Chat -->
+  <div id="chat-box">
+    <div class="msg msg-ai">
+      <div class="msg-meta"><div class="msg-meta-dot"></div>kavix</div>
+      <div class="msg-bubble">Hi — I'm Kavix. You can type to me or tap the microphone and just speak. I'll listen and respond. What would you like to talk about?</div>
+    </div>
+  </div>
+
+  <!-- Voice ring -->
+  <div class="voice-ring-wrap">
+    <div class="voice-ring" id="voice-ring" onclick="startVoice()" title="Tap to speak">
+      <div class="ring"></div>
+      <div class="ring ring-2"></div>
+      <div class="ring ring-3"></div>
+      <div class="voice-icon">🎤</div>
+    </div>
+  </div>
+
+  <!-- Text input -->
+  <div class="input-section">
+    <div class="input-wrap">
+      <input type="text" id="input" placeholder="or type here…" onkeydown="if(event.key==='Enter') sendMessage()">
+      <button class="send-btn" onclick="sendMessage()">Send</button>
+    </div>
+    <div class="input-hint">tap mic to speak &nbsp;·&nbsp; enter to send</div>
+  </div>
+
+</div>
+
+<script>
+// ════════════════════════════════════════
+// MEMORY
+// ════════════════════════════════════════
+const Memory = (() => {
+  let turns = 0;
+  let store = [];
+
+  function add(role, content) {
+    store.push({ role, content });
+    if (store.length > 40) store.shift();
+    turns = Math.floor(store.length / 2);
+    const el = document.getElementById('mem-label');
+    if (el) el.textContent = `${turns} turn${turns !== 1 ? 's' : ''}`;
+  }
+
+  function getHistory() { return store.slice(); }
+
+  return { add, getHistory };
+})();
+
+
+// ════════════════════════════════════════
+// API
+// ════════════════════════════════════════
+let API_KEY = '';
+
+function saveApiKey() {
+  const val = document.getElementById('api-key-input').value.trim();
+  if (!val.startsWith('sk-')) { alert('Please enter a valid Anthropic API key.'); return; }
+  API_KEY = val;
+  document.getElementById('api-modal').style.display = 'none';
+}
+
+async function callClaude(userMessage) {
+  if (!API_KEY) {
+    document.getElementById('api-modal').style.display = 'flex';
+    return null;
+  }
+
+  const messages = [...Memory.getHistory(), { role: 'user', content: userMessage }];
+
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': API_KEY,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-opus-4-5',
+      max_tokens: 1024,
+      system: 'You are Kavix, a warm and thoughtful voice assistant. Keep responses conversational and concise — they may be read aloud. Avoid bullet points or markdown.',
+      messages
+    })
+  });
+
+  const data = await resp.json();
+  if (data.error) throw new Error(data.error.message);
+  const reply = data.content?.[0]?.text || '(no response)';
+  Memory.add('user', userMessage);
+  Memory.add('assistant', reply);
+  return reply;
+}
+
+
+// ════════════════════════════════════════
+// CHAT UI
+// ════════════════════════════════════════
+function appendMsg(role, text) {
+  const box = document.getElementById('chat-box');
+
+  const wrap = document.createElement('div');
+  wrap.className = `msg msg-${role === 'user' ? 'user' : 'ai'}`;
+
+  const meta = document.createElement('div');
+  meta.className = 'msg-meta';
+  const dot = document.createElement('div');
+  dot.className = 'msg-meta-dot';
+  const name = document.createTextNode(role === 'user' ? 'you' : 'kavix');
+  if (role === 'user') { meta.appendChild(name); meta.appendChild(dot); }
+  else                 { meta.appendChild(dot); meta.appendChild(name); }
+
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble';
+  bubble.textContent = text;
+
+  wrap.appendChild(meta);
+  wrap.appendChild(bubble);
+  box.appendChild(wrap);
+  box.scrollTop = box.scrollHeight;
+}
+
+function showTyping() {
+  const box = document.getElementById('chat-box');
+  const wrap = document.createElement('div');
+  wrap.className = 'msg msg-ai msg-typing';
+  wrap.id = 'typing';
+
+  const meta = document.createElement('div');
+  meta.className = 'msg-meta';
+  const dot = document.createElement('div');
+  dot.className = 'msg-meta-dot';
+  meta.appendChild(dot);
+  meta.appendChild(document.createTextNode('kavix'));
+
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble';
+  bubble.innerHTML = '<div class="ty"></div><div class="ty"></div><div class="ty"></div>';
+
+  wrap.appendChild(meta);
+  wrap.appendChild(bubble);
+  box.appendChild(wrap);
+  box.scrollTop = box.scrollHeight;
+}
+
+function removeTyping() {
+  const el = document.getElementById('typing');
+  if (el) el.remove();
+}
+
+async function sendMessage() {
+  const input = document.getElementById('input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+
+  appendMsg('user', text);
+  showTyping();
+
+  try {
+    const reply = await callClaude(text);
+    removeTyping();
+    if (reply) {
+      appendMsg('ai', reply);
+      speakText(reply);
+    }
+  } catch (err) {
+    removeTyping();
+    appendMsg('ai', `Something went wrong: ${err.message}`);
+  }
+}
+
+
+// ════════════════════════════════════════
+// VOICE
+// ════════════════════════════════════════
+let recognition = null;
+
+function startVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    appendMsg('ai', "Voice recognition isn't available in your browser — try Chrome.");
+    return;
+  }
+
+  if (!recognition) {
+    recognition = new SR();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = e => {
+      const t = e.results[0][0].transcript;
+      document.getElementById('input').value = t;
+      sendMessage();
+    };
+
+    recognition.onend = () => {
+      document.getElementById('voice-ring').classList.remove('listening');
+    };
+
+    recognition.onerror = e => {
+      document.getElementById('voice-ring').classList.remove('listening');
+      appendMsg('ai', `Voice error: ${e.error}`);
+    };
+  }
+
+  document.getElementById('voice-ring').classList.add('listening');
+  recognition.start();
+}
+
+function speakText(text) {
+  if (!window.speechSynthesis) return;
+  speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text.substring(0, 400));
+  utt.rate  = 0.95;
+  utt.pitch = 1.0;
+
+  // Prefer a natural-sounding voice
+  const voices = speechSynthesis.getVoices();
+  const preferred = voices.find(v => v.name.includes('Samantha') || v.name.includes('Google UK') || v.name.includes('Karen'));
+  if (preferred) utt.voice = preferred;
+
+  speechSynthesis.speak(utt);
+}
+
+// Voices load async in some browsers
+window.speechSynthesis?.addEventListener('voiceschanged', () => {});
+</script>
 </body>
 </html>

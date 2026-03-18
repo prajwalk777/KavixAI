@@ -24,6 +24,60 @@
 * Text-to-Speech & Speech Recognition
 
 ---
+---
+
+## 📦 Requirements
+
+### 🔌 Arduino Libraries
+
+Install the following libraries in **Arduino IDE**:
+
+* `WiFi.h`
+* `WebServer.h`
+* `Adafruit_GFX`
+* `Adafruit_SSD1306`
+
+---
+
+### 🐍 Python Dependencies
+
+Create a `requirements.txt` file in your project root:
+
+```txt
+opencv-python
+flask
+numpy
+```
+
+Install using:
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+### 🔑 Environment Variables
+
+Create a `.env` file for API keys:
+
+```env
+OPENAI_API_KEY=your_key_here
+```
+
+> ⚠️ Do NOT share your API keys publicly.
+
+---
+
+## ⚙️ Setup Instructions
+
+1. Install Arduino libraries
+2. Install Python dependencies
+3. Add your API key in `.env`
+4. Upload `.ino` code to ESP32
+5. Run the Python/Frontend app
+
+---
 
 ## 📂 Project Structure
 

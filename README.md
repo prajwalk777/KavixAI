@@ -137,7 +137,7 @@ Example:
 
 ## 👨‍💻 Author
 
-**prajwalk777**
+**Prajwal K**
 
 ---
 
